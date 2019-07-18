@@ -1,0 +1,124 @@
+---
+title: "Flight Schedule Prediction using Naive Bayes Classification"
+author: "Vinayak"
+date: "7/16/2019"
+output: 
+    html_document:
+        code_folding: show
+        toc: TRUE
+        toc_depth: 3
+        toc_float:
+            collapsed: TRUE
+            smooth_scroll: TRUE
+        number_sections: TRUE
+---
+
+# Objective
+
+Given data related to flights, predict the status of a flight for given data by introducing a train test split. Use Naive Bayes classifier to accompllish this task. Analyze the error metrics for your model.
+
+## Read/Observe
+
+Read the data into a tibble and see it's structure, head and other descriptive stats.
+
+```{r message = FALSE, warning = FALSE}
+library(readr)
+library(dplyr)
+setwd("C:\\Users\\nayak\\Desktop\\INSOFE\\My_Scripts\\Flight_Schedule_Naive_Bayes")
+flights_data = tbl_df(read.csv("FlightDelays.csv"))
+str(flights_data)
+head(flights_data)
+```
+
+## Data Preprocessing
+
+Before analyzing the data, some preprocessing needs to be done so that the model will function properly. 
+
+### Feature selection
+
+Keep only those variables needed for the sake of analysis. For the sake of this analysis, I presume that the tail_num, date of flight and the flight number would not influence the status of a flight. Hence removing those for the sake of this study.
+
+```{r message=FALSE, warning=FALSE}
+flights_data = select(flights_data, -c(FL_DATE, FL_NUM, TAIL_NUM))
+head(flights_data)
+```
+
+### Factorizing categorical data
+
+In Naive Bayes Classification, the variation of target categorical variable is studied based on a set of categorical predictor variables. Hence, we need to factorize the numerical variables.
+```{r message = FALSE, warning = FALSE}
+flights_data$Weather = as.factor(flights_data$Weather)
+
+flights_data$Flight.Status = as.factor(sapply(flights_data$Flight.Status, function(x){if(x == "delayed") {0} else {1}}))
+
+# Create a vector of bins
+dpt_bins = seq(500, 2400, 100)
+
+# Create a vector of labels to be assigned to the bins
+# Create a character vector and then fill names in it using dpt_bins
+# +59 ===> Passing of an hour
+
+dpt_bins_labels = character(length = length(dpt_bins)-1)
+for(i in 1:(length(dpt_bins)-1)){
+    dpt_bins_labels[i] = paste(as.character(dpt_bins[i]), "-", as.character(dpt_bins[i] + 59))
+}
+
+# Factorizing the departure time.
+flights_data$DEP_TIME = cut(flights_data$DEP_TIME, dpt_bins, dpt_bins_labels, include.lowest = TRUE, right = FALSE)
+head(flights_data)
+```
+
+## Train - Test Split
+
+From the given data, create two groups viz. train and test which will have 60 % and 40 % of the entire group respectively.
+```{r}
+allrows = 1:nrow(flights_data)
+# For different versions of R, the set.seed command works differently. To ensure you get the same Random Numbers on different system it is better to make sure that the version is explicitly specified.
+RNGversion("3.6.0")
+set.seed(123)
+trainrows = sample(allrows, floor(0.6 * nrow(flights_data)))
+testrows = allrows[-trainrows]
+train_data = flights_data[trainrows,]
+test_data = flights_data[testrows,]
+```
+**TRAIN DATA**
+```{r}
+head(train_data)
+dim(train_data)
+```
+**TEST DATA**
+```{r}
+head(test_data)
+dim(test_data)
+```
+
+## Model Building
+Build a model on the training data using Naive Bayes Classifier and predict the outcome on train as well as test data.
+
+```{r warning = FALSE, message = FALSE}
+library(e1071)
+model = naiveBayes(Flight.Status ~ .,data = train_data)
+```
+The specifics of model are as follows:
+```{r warning = FALSE, message = FALSE}
+model
+# Predict on Train Data
+trpred = predict(model, train_data)
+tabtrain = table(trpred, train_data$Flight.Status)
+# Predict on Test Data
+tspred = predict(model, test_data)
+tabtest = table(tspred, test_data$Flight.Status)
+```
+
+## Error Metrics
+
+**CONFUSION MATRIX** 
+This is a 2 X 2 matrix which contains True Positives, False Positives, True Negatives and False Negatives respectively which can be used to calculate Recall, Precision, Accuracy, $F_1$ score etc. 
+
+```{r warning=FALSE, message=FALSE}
+library(caret)
+print("The confusion matrix for train data is as follows:")
+confusionMatrix(tabtrain)
+print("The confusion matrix for test data is as follows:")
+confusionMatrix(tabtest)
+```
